@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+
+use Env::PS1 qw/$PS1/;
+
+my @demo = (
+	username => '\u',
+	'current dir' => '\w',
+	'basename current dir' => '\W',
+	hostname => '\H',
+	'short hostname' => '\h',
+	'basename $0' => '\s',
+	date => '\d',
+	'terminal device' => '\l',
+	time => '\t',
+	time => '\T',
+	time => '\@',
+	time => '\A',
+);
+
+my ($i, $l) = (0, 0);
+length($_) > $l and $l = length($_) for grep {++$i % 2} @demo;
+$l += 2;
+
+print "Most escapes are one character long, like these:\n";
+
+while (@demo) {
+	my ($k, $v) = ( shift(@demo), shift(@demo) );
+	$ENV{PS1} = $v;
+	print $k, ' 'x($l - length($k)), "$v  =  $PS1\n";
+}
+
+print "\nAlso their are two escapes with arguments:\n";
+
+$ENV{PS1} = '\\D{%a %b %e %H:%M:%S %Y}';
+print "strftime format   \\D{\%a \%b \%e \%H:\%M:\%S \%Y}\n\t= $PS1\n";
+
+$ENV{PS1} = q(\\C{bold,red}shiny isn't it ?\\C{reset});
+print "and ANSI colours  \\C{bold,red}shiny isn't it ?\\C{reset}\n\t= $PS1\n";
+
