@@ -13,4 +13,5 @@ Module::Build->new(
 		'AutoSplit'     => 0,
 	},
 	autosplit => 'lib/Env/PS1.pm',
+	create_makefile_pl => 'passthrough',
 )->create_build_script;

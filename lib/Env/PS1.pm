@@ -4,7 +4,7 @@ use strict;
 use Carp;
 use AutoLoader 'AUTOLOAD';
 
-our $VERSION = 0.01;
+our $VERSION = 0.02;
 
 sub import {
 	my $class = shift;
@@ -52,7 +52,8 @@ sub sprintf {
 }
 
 our @user_info; # ($name,$passwd,$uid,$gid,$quota,$comment,$gcos,$dir,$shell,$expire)
-our %map = (
+our %map; # for custom stuff
+our %alias = (
 	'$' => 'dollar',
 	'@' => 'D', t => 'D', T => 'D', A => 'D',
 );
@@ -67,17 +68,16 @@ sub cache {
 		push @parts, $1 || '';
 		if ($2 eq '\\\\') { push @parts, '\\' }
 		elsif ($3) { push @parts, eval qq/"\\$3"/ }
-		elsif ($4 eq 'C' or $4 eq 'D') { # special cases
+		elsif (exists $map{$4}) { push @parts, $map{$4} }
+		elsif (grep {$4 eq $_} qw/C D P/) { # special cases
 			my $sub = $4 ;
 			$format =~ s/^\{(.*?)\}//;
-			#print "# matched: $sub\{$1}\n";
 			push @parts, $self->$sub($sub, $1);
 		}
 		elsif ($4 eq '[' or $4 eq ']') { next }
 		else {
-			my $sub = exists($map{$4}) ? $map{$4} : $4 ;
-			#print "# matched: $4 sub: $sub\n";
-			push @parts, $self->can($sub) ? $self->$sub($4) : "\\$4";
+			my $sub = exists($alias{$4}) ? $alias{$4} : $4 ;
+			push @parts, $self->can($sub) ? ($self->$sub($4)) : "\\$4";
 		}
 	}
 	push @parts, $format;
@@ -289,32 +289,54 @@ sub h {
 
 =item \l
 
-The basename of the (output) terminal device name
+The basename of the (output) terminal device name,
+uses POSIX, but won't be really portable.
+
+=cut
+
+sub L { # How platform dependent is this ?
+	use POSIX qw/ttyname/;
+	*L = sub { ttyname(STDOUT) };
+	return L;
+}
+
+sub l {
+	$_[0]->L =~ m#([^/]*)$#;
+	return $1;
+}
 
 =item \[ \]
 
 These are used to encapsulate a sequence of non-printing chars.
 Since we don't need that, they are removed.
 
-=cut
-
-sub l { # How platform dependent is this ?
-	my $node = readlink("/proc/$$/fd/1");
-	$node =~ m#([^/]*)$#;
-	return $1;
-}
-
 =back
 
 =head2 Extensions
 
-The following escapes are extensions not supported by bash:
+The following escapes are extensions not supported by bash, and are not portable:
 
 =over 4
 
+=item \L
+
+The (output) terminal device name, uses POSIX, but won't be really portable.
+
 =item \C{colour}
 
-Insert the ANSI sequence for named colour, background colours prefixed with "on_"
+Insert the ANSI sequence for named colour.
+Known colours are: black, red, green, yellow, blue, magenta, cyan and white;
+background colours prefixed with "on_".
+Also known are reset, bold, dark, underline, blink and reverse, although the
+effect depends on the terminla you use.
+
+Unless you want the whole commandline coloured yous should 
+end your prompt with "\C{reset}".
+
+Of course you can still use the "raw" ansi escape codes for these colours.
+
+Note that "bold" is sometimes also known as "bright", so "\C{bold,black}"
+will on some terminals render dark grey.
 
 =cut
 
@@ -322,6 +344,7 @@ sub C {
 	our %colours = (
 		reset     => 00,
 		bold      => 01,
+		dark      => 02,
 		underline => 04,
 		blink     => 05,
 		reverse   => 07,
@@ -344,7 +367,96 @@ sub C {
 	C(@_);
 }
 
-# TODO carlos' wicked battery status code ?
+=item \P{format}
+
+Proc information.
+
+I<All of these are unix specific>
+
+=over 4
+
+=item %a
+
+Acpi AC status '+' or '-' for connected or not, linux specific
+
+=item %b
+
+Acpi battery status in mWh, linux specific
+
+=item %L
+
+Load average
+
+=item %l
+
+First number of the load average
+
+=item %t
+
+Acpi temperature, linux specific
+
+=item %u
+
+Uptime
+
+=item %w
+
+Number of users logged in
+
+=back
+
+=cut
+
+# $ uptime
+# 17:38:53 up  3:24,  2 users,  load average: 0.04, 0.10, 0.13
+
+sub P {
+	my ($self, undef, $format) = @_;
+	my %code;
+	$format =~ s/\%(.)/$code{$1}++; "'.\$proc{$1}.'"/ge;
+	my @subs = grep exists($code{$_}), qw/a b t/;
+
+	return sub {
+		my %proc;
+		for my $s (@subs) {
+			my $sub = "P_$s";
+			$proc{$s} = $self->$sub();
+		}
+		if (open UP, 'uptime|') {
+			my $up = <UP>;
+			close UP;
+			$up =~ /up\s*(\d+:\d+)/ and $proc{u} = $1;
+			$up =~ /(\d+)\s*user/     and $proc{w} = $1;
+			$up =~ /((\d+\.\d+),\s*\d+\.\d+,\s*\d+\.\d+)/
+				and @proc{'L', 'l'} = ($1, $2);
+		}
+		#use Data::Dumper; print "'$format'", Dumper \%proc, "\n";
+		eval "'$format'"; # all in single quote, except for escapes
+	}
+}
+
+sub P_a {
+	open(AC,'/proc/acpi/ac_adapter/AC/state') or return '?';
+	my $a = <AC>;
+	close AC;
+	return ( ($a =~ /on/) ? '+' : '-' );
+}
+
+sub P_b {
+	open(BAT,'/proc/acpi/battery/BAT0/state') or return '?';
+	my ($b) = grep /^remaining capacity:/, (<BAT>);
+	close BAT;
+	$b =~ /(\d+)/;
+	return $1 || '0';
+}
+
+sub P_t {
+	open(TH, '/proc/acpi/thermal_zone/THM/temperature') or return '?';
+	my $t = <TH>;
+	close TH;
+	$t =~ /(\d+)/;
+	return $1 || '0';
+}
 
 =back
 
@@ -352,8 +464,6 @@ sub C {
 
 The following escapes are not implemented, most of them because they are
 application specific.
-
-FIXME how to customly supply these ? overload or hash ?
 
 =over 4
 
@@ -382,6 +492,12 @@ The command number of this command (like history number, but minus the
 lines read from the history file).
 
 =back
+
+=head2 Customizing
+
+If you want to overload escapes or want to supply values for the application
+specific escapes you can put them in C<%Env::PS1::map>, the key is the escape letter,
+the value either a string or a CODE ref.
 
 =head1 BUGS
 

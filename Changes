@@ -1,5 +1,12 @@
 Revision history for Env-PS1 - prompt string formatter
 
+0.02 Wed Mar 10
+        - Added Makefile.PL - only Build.PL doesn't seem enough :(
+	- Tweaked the example script a bit
+	- Added \P{format} for proc info
+	- Added carl0s' acpi snippets
+	- Fixed customization
+
 0.01 Mon Mar 08
         - Finished all initial features
 

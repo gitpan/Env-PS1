@@ -1,7 +1,7 @@
 
 use strict;
 use vars qw/$PS1 $PS2/;
-use Test::More tests => 5;
+use Test::More tests => 7;
 
 use_ok('Env::PS1', '$PS1');
 
@@ -18,3 +18,11 @@ ok Env::PS1->sprintf('\u@foobar') eq $u_info[0].'@foobar', 'E:PS1:sprintf';
 
 $PS1 = '\u@foobar';
 ok $PS1 eq $u_info[0].'@foobar', 'STORE';
+
+$PS1 = '\$';
+ok $PS1 eq ($u_info[2] ? '$' : '#'), 'alias';
+
+no warnings;
+$Env::PS1::map{v} = 3;
+$PS1 = '\v';
+ok $PS1 eq 3, 'map';
