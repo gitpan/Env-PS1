@@ -4,7 +4,9 @@ use strict;
 use Carp;
 use AutoLoader 'AUTOLOAD';
 
-our $VERSION = 0.02;
+our $VERSION = 0.03;
+
+our $_getpwuid = eval { getpwuid($>) }; # Not supported on some platforms
 
 sub import {
 	my $class = shift;
@@ -29,15 +31,17 @@ sub TIESCALAR {
 
 sub STORE {
 	my $self = shift;
-	$ENV{$$self{var}} = shift;
+	if (ref $$self{var}) { ${$$self{var}} = shift }
+	else { $ENV{$$self{var}} = shift }
 	$self->cache();
 }
 
 sub FETCH {
 	my $self = shift;
-	unless ($ENV{$$self{var}} eq $$self{format}) {
-		$$self{format} = $ENV{$$self{var}};
-		$$self{cache} = [ $self->cache($$self{format}) ];
+	my $format = ref($$self{var}) ? ${$$self{var}} : $ENV{$$self{var}} ;
+	unless ($format eq $$self{format}) {
+		$$self{format} = $format;
+		$$self{cache} = [ $self->cache($format) ];
 	}
 	my $string = join '', map { ref($_) ? $_->() : $_ } @{$$self{cache}};
 	$string =~ s/(\\\!|\!)/($1 eq '!') ? '!!' : '!'/ge;
@@ -61,7 +65,7 @@ our %alias = (
 sub cache {
 	my ($self, $format) = @_;
 	return '' unless defined $format; # get rid of uninitialised warnings
-	@user_info = getpwuid($>);
+	@user_info = getpwuid($>) if $_getpwuid;
 	my @parts;
 	#print "# string: $format\n";
 	while ($format =~ s/^(.*?)(\\\\|\\([aenr]|0\d\d)|\\(.))//s) {
@@ -91,7 +95,7 @@ sub cache {
 
 ## format subs
 
-sub u { $user_info[0] }
+sub u { $user_info[0] || $ENV{USER} || $ENV{LOGNAME} }
 
 sub w { return sub { $ENV{PWD} } }
 
@@ -124,6 +128,10 @@ Env::PS1 - prompt string formatter
 	# or tie it yourself
 	tie $prompt, 'Env::PS1', 'PS1';
 
+	# you can also tie a scalar ref
+	$format = '\u@\h\$ ';
+	tie $prompt, 'Env::PS1', \$format;
+
 =head1 DESCRIPTION
 
 This package supplies variables that are "tied" to environment variables like
@@ -136,6 +144,12 @@ It is intended to be used in combination with the various ReadLine packages.
 
 You can request for arbitrary variables to be exported, they will be
 tied to the environment variables of the same name.
+
+=head1 TIE
+
+When you C<tie> a variable you can supply one argument which can either be
+the name of an environement variable or a SCALAR reference. This argument
+defaults to 'PS1'.
 
 =head1 METHODS
 
@@ -256,7 +270,7 @@ The basename of the current working directory
 
 =cut
 
-sub dollar { ($user_info[2] == 0) ? '#' : '$' }
+sub dollar { $user_info[2] ? '$' : '#' }
 
 =item \0dd
 
@@ -278,6 +292,7 @@ First part of the hostname
 
 sub H {
 	use Sys::Hostname;
+	no warnings;
 	*H = \&hostname;
 	return hostname;
 }
@@ -296,6 +311,7 @@ uses POSIX, but won't be really portable.
 
 sub L { # How platform dependent is this ?
 	use POSIX qw/ttyname/;
+	no warnings;
 	*L = sub { ttyname(STDOUT) };
 	return L;
 }
@@ -330,7 +346,7 @@ background colours prefixed with "on_".
 Also known are reset, bold, dark, underline, blink and reverse, although the
 effect depends on the terminla you use.
 
-Unless you want the whole commandline coloured yous should 
+Unless you want the whole commandline coloured you should 
 end your prompt with "\C{reset}".
 
 Of course you can still use the "raw" ansi escape codes for these colours.
@@ -338,28 +354,31 @@ Of course you can still use the "raw" ansi escape codes for these colours.
 Note that "bold" is sometimes also known as "bright", so "\C{bold,black}"
 will on some terminals render dark grey.
 
+If the environment variable C<CLICOLOR> is defined but false colours are
+switched off automaticly.
+
 =cut
 
 sub C {
-	our %colours = (
-		reset     => 00,
-		bold      => 01,
-		dark      => 02,
-		underline => 04,
-		blink     => 05,
-		reverse   => 07,
+	our %colours = ( # Copied from Term::ANSIScreen
+		'clear'      => 0,    'reset'      => 0,
+		'bold'       => 1,    'dark'       => 2,
+		'underline'  => 4,    'underscore' => 4,
+		'blink'      => 5,    'reverse'    => 7,
+		'concealed'  => 8,
 
-		black   => 30,	on_black   => 40,
-		red     => 31,	on_red     => 41,
-		green   => 32,	on_green   => 42,
-		yellow  => 33,	on_yellow  => 43,
-		blue    => 34,	on_blue    => 44,
-		magenta => 35,	on_magenta => 45,
-		cyan    => 36,	on_cyan    => 46,
-		white   => 37,	on_white    => 47,
+		'black'      => 30,   'on_black'   => 40,
+		'red'        => 31,   'on_red'     => 41,
+		'green'      => 32,   'on_green'   => 42,
+		'yellow'     => 33,   'on_yellow'  => 43,
+		'blue'       => 34,   'on_blue'    => 44,
+		'magenta'    => 35,   'on_magenta' => 45,
+		'cyan'       => 36,   'on_cyan'    => 46,
+		'white'      => 37,   'on_white'   => 47,
 	);
-
+	no warnings;
 	*C = sub {
+		return if defined $ENV{CLICOLOR} and ! $ENV{CLICOLOR};
 		my @attr = split ',', $_[2];
 		#print "# $_[2] => \\e[" . join(';', map {$colours{lc($_)}} @attr) . "m\n";
 		return "\e[" . join(';', map {$colours{lc($_)}} @attr) . "m";
@@ -462,33 +481,33 @@ sub P_t {
 
 =head2 Not implemented escapes
 
-The following escapes are not implemented, most of them because they are
-application specific.
+The following escapes are not implemented, because they are application specific.
 
 =over 4
 
 =item \j
 
-The number of jobs currently managed by the shell
+The number of jobs currently managed by the application.
 
 =item \v
 
-The version of bash
+The version of the application.
 
 =item \V
 
-The release of bash, version + patchelvel
+The release number of the application, version + patchelvel
 
 =item \!
 
-The history number of this command, gets replaced by literal '!'
-while a literal '!' gets replaces by '!!';
-this makes the string a posix compatible prompt, thus it will work
-if your readline module expects a posix prompt.
+The history number of the next command.
+
+This escape gets replaced by literal '!' while a literal '!' gets replaces by '!!';
+this makes the string a posix compatible prompt, thus it will work if your readline
+module expects a posix prompt.
 
 =item \#
 
-The command number of this command (like history number, but minus the
+The command number of the next command (like history number, but minus the
 lines read from the history file).
 
 =back

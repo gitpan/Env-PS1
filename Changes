@@ -1,5 +1,14 @@
 Revision history for Env-PS1 - prompt string formatter
 
+0.03 Mon Mar 29 2004
+        - Added support to tie a scalar reference
+
+     Tue Mar 23
+        - Fixed bug for platforms not supporting getpwuid()
+
+     Sat Mar 13
+        - Introduced $ENV{CLICOLOR} to switch colours on/off
+
 0.02 Wed Mar 10
         - Added Makefile.PL - only Build.PL doesn't seem enough :(
 	- Tweaked the example script a bit
