@@ -1,5 +1,12 @@
 Revision history for Env-PS1 - prompt string formatter
 
+0.04 Tue Aug 03 2004
+	Release due to vital bug fix
+
+     Wed Jul 28
+        - Made all autosplit'ed subroutine names case-insensitive unique
+	appeared a case-insensitive filesystem could cause an infinite loop
+
 0.03 Mon Mar 29 2004
         - Added support to tie a scalar reference
 

@@ -1,8 +1,7 @@
 --- #YAML:1.0
 name: Env-PS1
-version: 0.03
-author:
-  - Jaap Karssenberg <pardus@cpan.org>
+version: 0.04
+author: Jaap Karssenberg <pardus@cpan.org>
 abstract: prompt string formatter
 license: perl
 requires:
@@ -14,5 +13,5 @@ build_requires:
 provides:
   Env::PS1:
     file: lib/Env/PS1.pm
-    version: 0.03
-generated_by: Module::Build version 0.24
+    version: 0.04
+generated_by: Module::Build version 0.25

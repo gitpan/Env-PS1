@@ -4,7 +4,7 @@ use strict;
 use Carp;
 use AutoLoader 'AUTOLOAD';
 
-our $VERSION = 0.03;
+our $VERSION = 0.04;
 
 our $_getpwuid = eval { getpwuid($>) }; # Not supported on some platforms
 
@@ -80,7 +80,7 @@ sub cache {
 		}
 		elsif ($4 eq '[' or $4 eq ']') { next }
 		else {
-			my $sub = exists($alias{$4}) ? $alias{$4} : $4 ;
+			my $sub = exists($alias{$4}) ? $alias{$4} : uc($4) ;
 			push @parts, $self->can($sub) ? ($self->$sub($4)) : "\\$4";
 		}
 	}
@@ -95,16 +95,15 @@ sub cache {
 
 ## format subs
 
-sub u { $user_info[0] || $ENV{USER} || $ENV{LOGNAME} }
-
-sub w { return sub { $ENV{PWD} } }
+sub U { $user_info[0] || $ENV{USER} || $ENV{LOGNAME} }
 
 sub W { 
+	return sub { $ENV{PWD} } if $_[1] eq 'w';
 	return sub {
 		return '/' if $ENV{PWD} eq '/';
 		$ENV{PWD} =~ m#([^/]*)/?$#;
 		return $1;
-	}
+	};
 }
 
 ## others defined below for Autoload
@@ -192,15 +191,13 @@ The date in strftime(3) format, uses L<POSIX>
 
 =cut
 
-sub d  {
+sub D  {
 	return sub {
 		my $t = localtime;
 		$t =~ m/^(\w+\s+\w+\s+\d+)/;
 		return $1;
-	}
-}
+	} if $_[1] eq 'd';
 
-sub D {
 	use POSIX qw(strftime);
 	my $format =
 		($_[1] eq 't') ? '%H:%M:%S' :
@@ -229,7 +226,7 @@ The basename of $0
 
 =cut
 
-sub s {
+sub S {
 	$0 =~ m#([^/]*)$#;
 	return $1 || '';
 }
@@ -293,13 +290,12 @@ First part of the hostname
 sub H {
 	use Sys::Hostname;
 	no warnings;
-	*H = \&hostname;
-	return hostname;
-}
-
-sub h {
-    $_[0]->H =~ /^(.*?)(\.|$)/;
-    return $1;
+	*H = sub {
+		my $h = &hostname;
+		$h =~ s#\..*$## if $_[1] eq 'h';
+		return $h;
+	};
+	return &H;
 }
 
 =item \l
@@ -312,13 +308,12 @@ uses POSIX, but won't be really portable.
 sub L { # How platform dependent is this ?
 	use POSIX qw/ttyname/;
 	no warnings;
-	*L = sub { ttyname(STDOUT) };
-	return L;
-}
-
-sub l {
-	$_[0]->L =~ m#([^/]*)$#;
-	return $1;
+	*L = sub {
+		my $t = ttyname(STDOUT);
+		$t =~ s#.*/## if $_[1] eq 'l';
+		return $t;
+	};
+	return &L;
 }
 
 =item \[ \]

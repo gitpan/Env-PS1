@@ -1,7 +1,7 @@
 
 use strict;
 use vars qw/$PS1 $PS2/;
-use Test::More tests => 9;
+use Test::More tests => 10;
 
 use_ok('Env::PS1', '$PS1');
 
@@ -37,3 +37,9 @@ no warnings;
 $Env::PS1::map{v} = 3;
 $PS1 = '\v';
 ok $PS1 eq 3, 'map';
+
+my $i = 0;
+$Env::PS1::map{i} = sub { ++$i };
+$PS1 = '\i';
+ok( ($PS1 == 1 and $PS1 == 2), 'map with subroutine' );
+
