@@ -50,7 +50,7 @@ print Env::PS1->sprintf($_), "\n\n" for
 	'\C{bold,blue}\u@\H \A \C{green}\W\$\C{reset} ',
 	'\[\033[01;31m\]\h \[\033[01;34m\]\W \$ \[\033[00m\]',
 	'\C{green}\D{%H:%M:%S} \W\$\C{reset} ',
-	'\C{bold,black}/--( \u@\H )-( \t )-( \w )- * *\n\\-- * \$\C{reset} ';
+	'\C{bold,black}/--( \u@\H )-( \t )-( \w )- * *\n\\\\-- * \$\C{reset} ';
 	
 __END__
 

@@ -1,7 +1,7 @@
 
 use strict;
 use vars qw/$PS1 $PS2/;
-use Test::More tests => 10;
+use Test::More tests => 11;
 
 use_ok('Env::PS1', '$PS1');
 
@@ -10,10 +10,15 @@ my @u_info = eval { getpwuid($>) }
 
 $ENV{PS1} = '\Q \u \\\\ ';
 print "# PS1: $PS1\n";
-ok $PS1 eq '\Q '.$u_info[0].' \\ ', 'simple format';
+ok $PS1 eq 'Q '.$u_info[0].' \\ ', 'simple format';
 
 $ENV{PS1} = '\\a\\n\\r\\007';
 ok $PS1 eq "\a\n\r\a", 'perl format';
+
+@ENV{qw/_TEST_ -TEST-/} = ('testing Env::PS1', '!');
+$ENV{PS1} = 'what ? $_TEST_ ${-TEST-}';
+print "# PS1: $PS1\n";
+ok $PS1 eq 'what ? testing Env::PS1 !!', 'format with env variable';
 
 $PS1 = '\$';
 ok $PS1 eq ($u_info[2] ? '$' : '#'), 'alias';

@@ -1,4 +1,15 @@
-Revision history for Env-PS1 - prompt string formatter
+ Revision history for Env-PS1 - prompt string formatter
+========================================================
+
+0.05 Mon Nov 22 2004
+	Maintenance release
+
+     Thu Nov 18
+	- Added the interpolation of environment variables
+	- Altered escape removal a little bit
+
+     Mon Aug 30
+        - Env::PS1 is now responding "live" to CLICOLOR
 
 0.04 Tue Aug 03 2004
 	Release due to vital bug fix

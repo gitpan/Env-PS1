@@ -4,7 +4,7 @@ use strict;
 use Carp;
 use AutoLoader 'AUTOLOAD';
 
-our $VERSION = 0.04;
+our $VERSION = 0.05;
 
 our $_getpwuid = eval { getpwuid($>) }; # Not supported on some platforms
 
@@ -33,26 +33,28 @@ sub STORE {
 	my $self = shift;
 	if (ref $$self{var}) { ${$$self{var}} = shift }
 	else { $ENV{$$self{var}} = shift }
-	$self->cache();
 }
 
 sub FETCH {
 	my $self = shift;
 	my $format = ref($$self{var}) ? ${$$self{var}} : $ENV{$$self{var}} ;
-	unless ($format eq $$self{format}) {
-		$$self{format} = $format;
+	$format =~ s#(\\\\)|(?<!\\)\$(?:(\w+)|\{(.*?)\})#
+		$1 ? '\\\\' : $2 ? $ENV{$2} : $ENV{$3}
+	#ge;
+	unless ($format eq $$self{format} and $ENV{CLICOLOR} eq $$self{clicolor}) {
+		@$self{qw/format clicolor/} = ($format, $ENV{CLICOLOR});
 		$$self{cache} = [ $self->cache($format) ];
 	}
 	my $string = join '', map { ref($_) ? $_->() : $_ } @{$$self{cache}};
-	$string =~ s/(\\\!|\!)/($1 eq '!') ? '!!' : '!'/ge;
 	return $string;
 }
 
 sub sprintf {
 	my $format = pop;
-	my $string = join '', map { ref($_) ? $_->() : $_ } Env::PS1->cache($format);
-	$string =~ s/(\\\!|\!)/($1 eq '!') ? '!!' : '!'/ge;
-	return $string;
+	$format =~ s#(\\\\)|(?<!\\)\$(?:(\w+)|\{(.*?)\})#
+		$1 ? '\\\\' : $2 ? $ENV{$2} : $ENV{$3}
+	#ge;
+	return join '', map { ref($_) ? $_->() : $_ } Env::PS1->cache($format);
 }
 
 our @user_info; # ($name,$passwd,$uid,$gid,$quota,$comment,$gcos,$dir,$shell,$expire)
@@ -68,11 +70,18 @@ sub cache {
 	@user_info = getpwuid($>) if $_getpwuid;
 	my @parts;
 	#print "# string: $format\n";
-	while ($format =~ s/^(.*?)(\\\\|\\([aenr]|0\d\d)|\\(.))//s) {
+	while ($format =~ s/^(.*?)(\\\\|\\([aenr]|0\d\d)|\\(.)|!)//s) {
 		push @parts, $1 || '';
-		if ($2 eq '\\\\') { push @parts, '\\' }
+		if ($2 eq '\\\\') { push @parts, '\\' } # stripped when \! is substitued
+		elsif ($2 eq '!') { push @parts, '!!' } # posix prompt escape :$
 		elsif ($3) { push @parts, eval qq/"\\$3"/ }
-		elsif (exists $map{$4}) { push @parts, $map{$4} }
+		elsif (exists $map{$4}) {
+			my $item = $map{$4};
+			if (ref $item and $format =~ s/^\{(.*?)\}//) {
+				push @parts, $item->($1); # obscure foo
+			}
+			else { push @parts, $item }
+	       	}
 		elsif (grep {$4 eq $_} qw/C D P/) { # special cases
 			my $sub = $4 ;
 			$format =~ s/^\{(.*?)\}//;
@@ -81,12 +90,12 @@ sub cache {
 		elsif ($4 eq '[' or $4 eq ']') { next }
 		else {
 			my $sub = exists($alias{$4}) ? $alias{$4} : uc($4) ;
-			push @parts, $self->can($sub) ? ($self->$sub($4)) : "\\$4";
+			push @parts, $self->can($sub) ? ($self->$sub($4)) : $4;
 		}
 	}
 	push @parts, $format;
 	my @cache = ('');
-	for (@parts) { # join strings, push code refs
+	for (@parts) { # optimise: join strings, push code refs
 		if (ref $_ or ref $cache[-1]) { push @cache, $_ }
 		else { $cache[-1] .= $_ }
 	}
@@ -166,12 +175,15 @@ of the format that remain the same anyway.
 
 =head1 FORMAT
 
-The format is copied from bash(1) because that's what it is supposed
-to be compatible with. We made some private extensions which obviously 
-are not portable.
+The format is copied mostly from bash(1) because that's what it is supposed
+to be compatible with. We made some private extensions which obviously are
+not portable.
 
-Note that is not the prompt format specified by the posix spec, that one 
-only knows "!" for istory number and "!!" for literal "!".
+Note that this is not the prompt format as specified by the posix specification,
+that would only know "!" for the history number and "!!" for a literal "!".
+
+Apart from the escape sequences you can also use environment variables in
+the format string; use C<$VAR> or C<${VAR}>.
 
 The following escape sequences are recognized:
 
@@ -309,7 +321,7 @@ sub L { # How platform dependent is this ?
 	use POSIX qw/ttyname/;
 	no warnings;
 	*L = sub {
-		my $t = ttyname(STDOUT);
+		my $t = ttyname(*STDOUT);
 		$t =~ s#.*/## if $_[1] eq 'l';
 		return $t;
 	};
@@ -511,7 +523,10 @@ lines read from the history file).
 
 If you want to overload escapes or want to supply values for the application
 specific escapes you can put them in C<%Env::PS1::map>, the key is the escape letter,
-the value either a string or a CODE ref.
+the value either a string or a CODE ref. If you map a CODE ref it normally is called 
+every time the prompt string is read. When the escape is followed by an argument
+in the format string (like C<\D{argument}>) the CODE ref is called only once when the
+string is cached, but in that case it may in turn return a CODE ref.
 
 =head1 BUGS
 
