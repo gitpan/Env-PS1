@@ -4,7 +4,7 @@ use strict;
 use Carp;
 use AutoLoader 'AUTOLOAD';
 
-our $VERSION = 0.05;
+our $VERSION = 0.06;
 
 our $_getpwuid = eval { getpwuid($>) }; # Not supported on some platforms
 
@@ -41,11 +41,15 @@ sub FETCH {
 	$format =~ s#(\\\\)|(?<!\\)\$(?:(\w+)|\{(.*?)\})#
 		$1 ? '\\\\' : $2 ? $ENV{$2} : $ENV{$3}
 	#ge;
-	unless ($format eq $$self{format} and $ENV{CLICOLOR} eq $$self{clicolor}) {
+        unless ($format eq $$self{format} and exists $ENV{CLICOLOR}
+                and $ENV{CLICOLOR} eq $$self{clicolor}) {
 		@$self{qw/format clicolor/} = ($format, $ENV{CLICOLOR});
 		$$self{cache} = [ $self->cache($format) ];
 	}
 	my $string = join '', map { ref($_) ? $_->() : $_ } @{$$self{cache}};
+        $string =~ s#\$\((.+)\)#
+          `$1`;
+        #ge;
 	return $string;
 }
 
@@ -107,9 +111,12 @@ sub cache {
 sub U { $user_info[0] || $ENV{USER} || $ENV{LOGNAME} }
 
 sub W { 
-	return sub { $ENV{PWD} } if $_[1] eq 'w';
+	return sub { $ENV{PWD} eq $ENV{HOME} ? "~" : $ENV{PWD} } if $_[1] eq 'w';
 	return sub {
 		return '/' if $ENV{PWD} eq '/';
+                if($ENV{PWD} eq $ENV{HOME}) {
+                  return "~";
+                }
 		$ENV{PWD} =~ m#([^/]*)/?$#;
 		return $1;
 	};
@@ -536,7 +543,10 @@ Please mail the author if you encounter any bugs.
 
 Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.orgE<gt>
 
+This module is currently maintained by Ryan Niebur E<lt>rsn@cpan.orgE<gt>
+
 Copyright (c) 2004 Jaap G Karssenberg. All rights reserved.
+Copyright (c) 2009 Ryan Niebur.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 

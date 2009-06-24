@@ -1,9 +1,6 @@
 #!/usr/bin/perl
 
-use lib './blib/lib/';
-
-die "Please run \"perl Build.PL && ./Build\" first\n" unless -d './blib/lib/';
-eval 'use Env::PS1 qw/$PS1/';
+use Env::PS1 qw/$PS1/;
 
 my @demo = (
 	username => '\u',

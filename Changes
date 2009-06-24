@@ -1,6 +1,15 @@
  Revision history for Env-PS1 - prompt string formatter
 ========================================================
 
+0.06 Tue Jun 23 2009
+     Minor bug fix release
+
+     - New Maintainer, thanks to Jaap for all the work thus far.
+     - Fix \w and \W when the current directory is $HOME (should show a tilde)
+     - work with the PS1='$(foobar)' style of command substitution
+     - check for existance of the CLICOLOR env var before using it,
+       thanks to Phil Pennock for the patch (RT #13074)
+
 0.05 Mon Nov 22 2004
 	Maintenance release
 
